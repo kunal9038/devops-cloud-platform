@@ -29,9 +29,12 @@ async function loadSystemStatus() {
 
     try {
 
+        const API_URL =
+    window.API_URL || "";
+
         const response = await fetch(
-            "http://localhost:5000/api/status"
-        );
+    `${API_URL}/api/status`
+);
 
         if (!response.ok) {
             throw new Error("Backend unavailable");
