@@ -77,6 +77,33 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to Kubernetes') {
+
+            agent {
+                label 'windows-minikube'
+            }
+
+                steps {
+                    powershell '''
+                            Write-Host "Deploying image tag: $env:IMAGE_TAG"
+
+                            kubectl set image deployment/backend `
+                            backend=kunalsingh9038/devops-cloud-backend:$env:IMAGE_TAG
+
+                            kubectl set image deployment/frontend `
+                            frontend=kunalsingh9038/devops-cloud-frontend:$env:IMAGE_TAG
+
+                            Write-Host "Waiting for backend rollout..."
+                            kubectl rollout status deployment/backend --timeout=120s
+
+                            Write-Host "Waiting for frontend rollout..."
+                            kubectl rollout status deployment/frontend --timeout=120s
+
+                            Write-Host "Deployment completed successfully."
+                             '''
+                             }
+                    }
     }
 
     post {

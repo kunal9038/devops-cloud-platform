@@ -20,9 +20,9 @@ spec:
       containers:
         - name: frontend
 
-          image: devops-cloud-frontend:k8s-test
+          image: kunalsingh9038/devops-cloud-frontend:a5d9f3a
 
-          imagePullPolicy: Never
+          imagePullPolicy: Always
 
           ports:
             - containerPort: 80
