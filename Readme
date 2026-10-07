@@ -1,0 +1,754 @@
+# DevOps Cloud Platform
+
+A production-style DevOps portfolio project demonstrating an end-to-end **CI/CD pipeline, containerization, Kubernetes deployment, HTTPS ingress, and monitoring**.
+
+The project uses **Jenkins** to automatically test, build, tag, push, and deploy Docker images to **Kubernetes on Minikube**.
+
+---
+
+## 🚀 Project Overview
+
+This project demonstrates how a modern DevOps workflow can automate application delivery from source code to a Kubernetes cluster.
+
+### The pipeline
+
+```text
+Developer
+    │
+    ▼
+ GitHub
+    │
+    ▼
+ Jenkins
+    │
+    ├── Run Backend Tests
+    │
+    ├── Build Docker Images
+    │
+    ├── Generate Git SHA Image Tag
+    │
+    └── Push Images to Docker Hub
+            │
+            ▼
+    Windows Minikube Agent
+            │
+            ▼
+       Kubernetes
+       ┌───────────────┐
+       │   Ingress     │
+       │ HTTPS / TLS   │
+       └───────┬───────┘
+               │
+        ┌──────┴──────┐
+        ▼             ▼
+    Frontend        Backend
+    2 replicas      2 replicas
+        │             │
+        └──────┬──────┘
+               ▼
+          Monitoring
+       Prometheus + Grafana
+```
+
+---
+
+## 🎯 Project Goals
+
+The main objective was to build a realistic DevOps platform rather than a simple Dockerized application.
+
+The project demonstrates:
+
+- Git-based source control
+- Automated CI/CD with Jenkins
+- Automated backend testing
+- Docker image creation
+- Immutable SHA-based image tagging
+- Docker Hub image publishing
+- Kubernetes deployments
+- Kubernetes Services
+- Multiple application replicas
+- Readiness and liveness probes
+- Kubernetes service discovery
+- NGINX Ingress
+- HTTPS/TLS
+- Automated Kubernetes deployments
+- Prometheus monitoring
+- Grafana visualization
+- Jenkins deployment through a dedicated Windows/Minikube agent
+
+---
+
+## 🛠️ Technology Stack
+
+| Category | Technology |
+|---|---|
+| Source Control | Git / GitHub |
+| Backend | Python / Flask |
+| Frontend | HTML / CSS / JavaScript |
+| Testing | Pytest |
+| CI/CD | Jenkins |
+| Containers | Docker |
+| Container Registry | Docker Hub |
+| Orchestration | Kubernetes |
+| Local Kubernetes | Minikube |
+| Ingress | NGINX Ingress Controller |
+| TLS | Kubernetes TLS Secret |
+| Monitoring | Prometheus |
+| Visualization | Grafana |
+| Deployment Agent | Windows + Minikube |
+| OS / Cloud | Windows + AWS-hosted Jenkins |
+
+---
+
+## 🏗️ Application Architecture
+
+The application consists of two primary services:
+
+### Frontend
+
+The frontend is exposed through Kubernetes and communicates with the backend through the Kubernetes Service DNS name.
+
+```text
+Frontend
+   │
+   ▼
+frontend-service
+   │
+   ▼
+Backend API
+```
+
+### Backend
+
+The backend is a Flask application exposing health functionality through:
+
+```text
+/api/health
+```
+
+Ingress rewrites the `/api` prefix before forwarding the request to the backend.
+
+For example:
+
+```text
+https://devops.local/api/health
+```
+
+is routed through Ingress to:
+
+```text
+backend-service:5000/health
+```
+
+The backend returns:
+
+```json
+{
+  "service": "devops-cloud-platform",
+  "status": "healthy"
+}
+```
+
+---
+
+## 🐳 Docker
+
+Both application components are containerized.
+
+### Backend image
+
+```text
+kunalsingh9038/devops-cloud-backend:<git-sha>
+```
+
+### Frontend image
+
+```text
+kunalsingh9038/devops-cloud-frontend:<git-sha>
+```
+
+Instead of relying only on `latest`, the pipeline uses the Git commit SHA as the image version.
+
+Example:
+
+```text
+kunalsingh9038/devops-cloud-backend:94a6f2d
+kunalsingh9038/devops-cloud-frontend:94a6f2d
+```
+
+This makes deployments traceable to an exact source-code revision.
+
+---
+
+## 🔄 CI/CD Pipeline
+
+Jenkins performs the following stages:
+
+### 1. Checkout
+
+Jenkins checks out the source code from GitHub.
+
+### 2. Set Image Tag
+
+The short Git commit SHA is extracted:
+
+```bash
+git rev-parse --short HEAD
+```
+
+Example:
+
+```text
+94a6f2d
+```
+
+### 3. Backend Tests
+
+The backend tests run automatically using Pytest.
+
+```text
+2 passed
+```
+
+### 4. Build Docker Images
+
+Jenkins builds:
+
+```text
+devops-cloud-backend:<SHA>
+devops-cloud-frontend:<SHA>
+```
+
+### 5. Push to Docker Hub
+
+Jenkins authenticates with Docker Hub using Jenkins credentials and pushes both images.
+
+### 6. Deploy to Kubernetes
+
+Jenkins connects to the Windows Minikube agent and updates the Kubernetes deployments:
+
+```bash
+kubectl set image deployment/backend ...
+kubectl set image deployment/frontend ...
+```
+
+### 7. Rollout Verification
+
+Jenkins waits for Kubernetes to complete the rollout:
+
+```bash
+kubectl rollout status deployment/backend
+kubectl rollout status deployment/frontend
+```
+
+The pipeline only reports success when both deployments successfully roll out.
+
+---
+
+## ☸️ Kubernetes Architecture
+
+The application runs on a Minikube Kubernetes cluster.
+
+### Deployments
+
+```text
+backend
+├── backend replica 1
+└── backend replica 2
+
+frontend
+├── frontend replica 1
+└── frontend replica 2
+```
+
+Current deployment configuration:
+
+```text
+Backend:  2 replicas
+Frontend: 2 replicas
+```
+
+### Services
+
+The cluster uses Kubernetes Services for internal communication:
+
+```text
+frontend-service
+backend-service
+```
+
+The frontend communicates with the backend using Kubernetes DNS rather than hard-coded pod IP addresses.
+
+---
+
+## ❤️ Health Checks
+
+Kubernetes uses readiness and liveness probes to monitor application health.
+
+### Readiness Probe
+
+Determines whether a pod is ready to receive traffic.
+
+### Liveness Probe
+
+Determines whether the application is still healthy.
+
+This allows Kubernetes to avoid routing traffic to unhealthy pods and restart containers when necessary.
+
+---
+
+## 🌐 Ingress
+
+The project uses the NGINX Ingress Controller.
+
+Traffic is routed using the hostname:
+
+```text
+devops.local
+```
+
+### Routing
+
+```text
+https://devops.local/
+        │
+        ▼
+frontend-service
+
+https://devops.local/api/health
+        │
+        ▼
+backend-service
+```
+
+The `/api` prefix is rewritten before the request reaches Flask.
+
+---
+
+## 🔐 HTTPS / TLS
+
+HTTPS is configured using a Kubernetes TLS Secret.
+
+```text
+devops-cloud-tls
+```
+
+The development environment uses a self-signed certificate for:
+
+```text
+devops.local
+```
+
+Example request:
+
+```bash
+curl.exe -k -H "Host: devops.local" https://127.0.0.1:<PORT>/api/health
+```
+
+> The TLS private key and certificate files are intentionally excluded from Git.
+
+---
+
+## 📊 Monitoring
+
+The project includes:
+
+### Prometheus
+
+Prometheus collects Kubernetes and application-related metrics.
+
+### Grafana
+
+Grafana is used to visualize the collected metrics.
+
+The monitoring stack is deployed into:
+
+```text
+monitoring
+```
+
+namespace.
+
+Prometheus is configured as a Grafana data source and has been successfully queried from Grafana.
+
+---
+
+## 📁 Project Structure
+
+```text
+devops-cloud-platform/
+│
+├── backend/
+│   ├── app.py
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── tests/
+│
+├── frontend/
+│   ├── ...
+│   └── Dockerfile
+│
+├── k8s/
+│   ├── backend-deployment.yaml
+│   ├── backend-service.yaml
+│   ├── frontend-deployment.yaml
+│   ├── frontend-service.yaml
+│   └── ingress.yaml
+│
+├── .github/
+│   └── ...
+│
+├── Jenkinsfile
+├── .gitignore
+└── README.md
+```
+
+---
+
+## 💻 Local Development
+
+### Prerequisites
+
+Install:
+
+- Git
+- Python 3.13+
+- Docker
+- kubectl
+- Minikube
+- Jenkins
+- Helm
+
+Clone the repository:
+
+```bash
+git clone https://github.com/kunal9038/devops-cloud-platform.git
+cd devops-cloud-platform
+```
+
+---
+
+## 🧪 Run Backend Tests
+
+From the backend directory:
+
+```bash
+cd backend
+pip install -r requirements.txt
+pytest
+```
+
+Expected result:
+
+```text
+2 passed
+```
+
+---
+
+## 🐳 Build Docker Images Manually
+
+From the project root:
+
+```bash
+docker build -t devops-cloud-backend:local ./backend
+```
+
+```bash
+docker build -t devops-cloud-frontend:local ./frontend
+```
+
+---
+
+## ☸️ Kubernetes Commands
+
+Check cluster:
+
+```bash
+kubectl get nodes
+```
+
+Check deployments:
+
+```bash
+kubectl get deployments
+```
+
+Check pods:
+
+```bash
+kubectl get pods -o wide
+```
+
+Check services:
+
+```bash
+kubectl get services
+```
+
+Check ingress:
+
+```bash
+kubectl get ingress
+```
+
+Check deployment images:
+
+```bash
+kubectl get deployment backend -o jsonpath="{.spec.template.spec.containers[0].image}"
+```
+
+```bash
+kubectl get deployment frontend -o jsonpath="{.spec.template.spec.containers[0].image}"
+```
+
+Check rollout:
+
+```bash
+kubectl rollout status deployment/backend
+```
+
+```bash
+kubectl rollout status deployment/frontend
+```
+
+---
+
+## 🔎 Verify the Current Deployment
+
+The CI/CD pipeline automatically deploys the Git SHA generated by Jenkins.
+
+For example:
+
+```text
+Backend:
+kunalsingh9038/devops-cloud-backend:94a6f2d
+
+Frontend:
+kunalsingh9038/devops-cloud-frontend:94a6f2d
+```
+
+This provides a direct relationship between:
+
+```text
+Git Commit
+     ↓
+Docker Image
+     ↓
+Kubernetes Deployment
+```
+
+---
+
+## 🔁 Deployment Strategy
+
+The Kubernetes deployments use multiple replicas and rolling updates.
+
+When Jenkins deploys a new image:
+
+```text
+Old Version
+   │
+   ├── Pod 1
+   └── Pod 2
+          ↓
+New Version
+   │
+   ├── Pod 1
+   └── Pod 2
+```
+
+Kubernetes manages the rollout while Jenkins waits for successful completion.
+
+This provides a safer deployment process than manually replacing containers.
+
+---
+
+## 🧰 Troubleshooting
+
+### Check pod status
+
+```bash
+kubectl get pods -o wide
+```
+
+### View backend logs
+
+```bash
+kubectl logs deployment/backend
+```
+
+### View frontend logs
+
+```bash
+kubectl logs deployment/frontend
+```
+
+### Describe a pod
+
+```bash
+kubectl describe pod <pod-name>
+```
+
+### Check deployment status
+
+```bash
+kubectl describe deployment backend
+```
+
+```bash
+kubectl describe deployment frontend
+```
+
+### Check Ingress
+
+```bash
+kubectl describe ingress devops-cloud-ingress
+```
+
+### Check Kubernetes events
+
+```bash
+kubectl get events --sort-by=.lastTimestamp
+```
+
+---
+
+## 🔐 Security Notes
+
+The following should **never** be committed to the repository:
+
+- Docker Hub passwords
+- Jenkins secrets
+- SSH private keys
+- TLS private keys
+- `.env` files
+- Kubernetes credentials
+
+Jenkins credentials are stored using Jenkins Credentials Management.
+
+TLS files are excluded from Git using:
+
+```text
+k8s/tls/
+```
+
+---
+
+## 📈 Key DevOps Concepts Demonstrated
+
+This project was specifically designed to demonstrate practical understanding of:
+
+- CI/CD
+- Git workflows
+- Jenkins pipelines
+- Automated testing
+- Docker
+- Container registries
+- Immutable image versioning
+- Git SHA tagging
+- Kubernetes Deployments
+- Kubernetes Services
+- Replica management
+- Readiness probes
+- Liveness probes
+- Kubernetes DNS
+- NGINX Ingress
+- HTTPS/TLS
+- Rolling deployments
+- Kubernetes rollout verification
+- Prometheus
+- Grafana
+- Infrastructure troubleshooting
+- CI/CD agent architecture
+
+---
+
+## 🧠 What This Project Demonstrates
+
+The most important part of this project is not simply running a Flask application.
+
+It demonstrates an automated delivery pipeline:
+
+```text
+Code Change
+    ↓
+Git Commit
+    ↓
+Jenkins
+    ↓
+Automated Tests
+    ↓
+Docker Build
+    ↓
+Git SHA Image
+    ↓
+Docker Hub
+    ↓
+Kubernetes Deployment
+    ↓
+Rolling Update
+    ↓
+Ingress + HTTPS
+    ↓
+Monitoring
+```
+
+A successful pipeline means a developer can make a code change and have the resulting version automatically tested, containerized, published, and deployed.
+
+---
+
+## 📌 Portfolio Highlights
+
+### CI/CD
+
+- Built a Jenkins declarative pipeline
+- Automated testing, Docker builds, image publishing, and Kubernetes deployment
+- Implemented Git SHA-based image versioning
+- Added automated rollout verification
+
+### Kubernetes
+
+- Deployed frontend and backend workloads
+- Configured multiple replicas
+- Added readiness and liveness probes
+- Implemented Kubernetes service discovery
+- Configured NGINX Ingress
+- Added HTTPS/TLS
+
+### Monitoring
+
+- Deployed Prometheus
+- Integrated Grafana with Prometheus
+- Created a Kubernetes monitoring environment
+
+### Troubleshooting
+
+Worked through real-world issues involving:
+
+- Jenkins agents
+- Java runtime compatibility
+- Kubernetes deployments
+- Container images
+- Ingress routing
+- API path rewriting
+- TLS certificates
+- Minikube networking
+- Jenkins-to-Kubernetes connectivity
+
+---
+
+## 📂 Repository
+
+**GitHub:**  
+https://github.com/kunal9038/devops-cloud-platform
+
+---
+
+## 👨‍💻 Author
+
+**Kunal Singh**
+
+DevOps / Cloud Engineering Portfolio Project
+
+---
